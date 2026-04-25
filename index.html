@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi Web — Sistema de Premios</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── TOKENS ─────────────────────────────────────────── */
+    :root {
+      --bg:        #0c0c0b;
+      --bg2:       #141412;
+      --bg3:       #1c1c19;
+      --border:    #2a2a26;
+      --text:      #f0efe8;
+      --muted:     #6b6b60;
+      --accent:    #c8f040;
+      --accent2:   #f0c040;
+      --danger:    #f04060;
+      --radius:    14px;
+      --font-head: 'Syne', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
+    }
+
+    /* ── RESET ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── NOISE OVERLAY ──────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: .6;
+    }
+
+    /* ── LAYOUT ─────────────────────────────────────────── */
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+    /* ── NAV ────────────────────────────────────────────── */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 0; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(12,12,11,.85); backdrop-filter: blur(16px);
+    }
+    .nav-logo {
+      font-family: var(--font-head); font-weight: 800; font-size: 18px;
+      letter-spacing: -.02em;
+    }
+    .nav-logo span { color: var(--accent); }
+    .nav-right { display: flex; align-items: center; gap: 20px; }
+    .nav-xp {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 40px; padding: 6px 14px; font-size: 13px;
+    }
+    .nav-xp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+    #nav-xp-val { font-weight: 600; color: var(--accent); }
+    .nav-streak {
+      font-size: 13px; color: var(--muted);
+    }
+    #nav-streak-val { color: var(--accent2); font-weight: 600; }
+
+    /* ── HERO ───────────────────────────────────────────── */
+    .hero {
+      padding: 80px 0 60px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;
+    }
+    .hero-tag {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--accent); border: 1px solid rgba(200,240,64,.3);
+      border-radius: 40px; padding: 5px 14px; margin-bottom: 20px;
+    }
+    .hero-tag::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+    .hero h1 {
+      font-family: var(--font-head); font-size: 52px; font-weight: 800;
+      line-height: 1.05; letter-spacing: -.03em; margin-bottom: 16px;
+    }
+    .hero h1 em { font-style: normal; color: var(--accent); }
+    .hero p { font-size: 16px; color: var(--muted); line-height: 1.7; margin-bottom: 28px; font-weight: 300; }
+    .hero-cta {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--accent); color: #0c0c0b;
+      font-family: var(--font-head); font-weight: 700; font-size: 14px;
+      padding: 14px 24px; border-radius: 40px; border: none; cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .hero-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(200,240,64,.3); }
+
+    /* Nivel card en hero */
+    .hero-level-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px;
+    }
+    .hlc-title { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+    .hlc-level { font-family: var(--font-head); font-size: 36px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+    .hlc-name { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
+    .xp-bar-track { height: 6px; background: var(--border); border-radius: 3px; margin-bottom: 8px; overflow: hidden; }
+    .xp-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; width: 0%; transition: width .6s cubic-bezier(.4,0,.2,1); }
+    .xp-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+    .hlc-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+    .hlc-stat { background: var(--bg3); border-radius: 10px; padding: 12px; }
+    .hlc-stat-val { font-family: var(--font-head); font-size: 22px; font-weight: 700; }
+    .hlc-stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── TABS ───────────────────────────────────────────── */
+    .tabs-nav {
+      display: flex; gap: 4px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 4px; margin: 40px 0 32px;
+    }
+    .tab-btn {
+      flex: 1; padding: 10px; border: none; background: none; cursor: pointer;
+      font-family: var(--font-body); font-size: 13px; font-weight: 500;
+      color: var(--muted); border-radius: 9px; transition: all .15s;
+    }
+    .tab-btn.active { background: var(--bg3); color: var(--text); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── SCRATCH CARD ───────────────────────────────────── */
+    .sc-wrap {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;
+    }
+    .sc-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+    .sc-header { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .sc-header-label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    .sc-header-note { font-family: var(--font-head); font-size: 15px; font-weight: 700; margin-top: 2px; }
+    .sc-canvas-wrap { position: relative; width: 100%; height: 180px; }
+    .sc-prize-layer {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; background: var(--bg3);
+    }
+    .sc-prize-icon { font-size: 36px; }
+    .sc-prize-text { font-family: var(--font-head); font-size: 24px; font-weight: 800; color: var(--accent); }
+    .sc-prize-sub { font-size: 13px; color: var(--muted); }
+    #scratch-canvas { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+    .sc-footer { padding: 12px 20px; border-top: 1px solid var(--border); }
+    .sc-progress-track { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 6px; }
+    .sc-progress-fill { height: 100%; background: var(--accent); border-radius: 2px; width: 0%; transition: width .1s; }
+    .sc-pct { font-size: 11px; color: var(--muted); text-align: right; }
+
+    /* Lado derecho de scratch */
+    .sc-info { display: flex; flex-direction: column; gap: 16px; }
+    .sc-result-box {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px; min-height: 120px;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .sc-result-title { font-family: var(--font-head); font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .sc-result-detail { font-size: 14px; color: var(--muted); }
+    .sc-result-code {
+      display: inline-block; margin-top: 12px;
+      background: var(--bg3); border: 1px dashed var(--accent);
+      border-radius: 8px; padding: 8px 16px;
+      font-family: monospace; font-size: 16px; font-weight: 700; color: var(--accent);
+      letter-spacing: .1em;
+    }
+    .sc-hint { font-size: 13px; color: var(--muted); text-align: center; }
+    .btn {
+      width: 100%; padding: 12px; border: none; cursor: pointer;
+      font-family: var(--font-head); font-size: 14px; font-weight: 700;
+      border-radius: 10px; transition: all .15s;
+    }
+    .btn-accent { background: var(--accent); color: #0c0c0b; }
+    .btn-accent:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(200,240,64,.25); }
+    .btn-accent:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { border-color: var(--text); }
+
+    /* ── WHEEL ──────────────────────────────────────────── */
+    .wheel-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: center; }
+    .wheel-canvas-wrap { position: relative; width: 280px; height: 280px; margin: 0 auto; }
+    #wheel-canvas { border-radius: 50%; }
+    .wheel-pointer {
+      position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+      width: 0; height: 0;
+      border-left: 10px solid transparent; border-right: 10px solid transparent;
+      border-top: 20px solid var(--accent);
+      filter: drop-shadow(0 2px 8px rgba(200,240,64,.5));
+    }
+    .wheel-info { display: flex; flex-direction: column; gap: 16px; }
+    .wheel-avail { font-size: 13px; color: var(--muted); }
+    .wheel-result-box {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px; min-height: 100px;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .wheel-result-title { font-family: var(--font-head); font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .wheel-result-detail { font-size: 14px; color: var(--muted); }
+
+    /* ── PRIZES LIST ────────────────────────────────────── */
+    .prizes-grid { display: flex; flex-direction: column; gap: 8px; }
+    .prize-item {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px 18px;
+    }
+    .prize-icon-box {
+      width: 40px; height: 40px; border-radius: 10px; background: var(--bg3);
+      display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;
+    }
+    .prize-name { font-size: 15px; font-weight: 500; }
+    .prize-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .prize-code-tag {
+      margin-left: auto; font-family: monospace; font-size: 13px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 10px; color: var(--accent); white-space: nowrap;
+    }
+    .empty-msg { text-align: center; padding: 60px 0; color: var(--muted); font-size: 15px; }
+
+    /* ── LEADERBOARD ────────────────────────────────────── */
+    .lb-list { display: flex; flex-direction: column; gap: 8px; }
+    .lb-item {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 18px;
+      transition: border-color .15s;
+    }
+    .lb-item.me { border-color: rgba(200,240,64,.4); background: rgba(200,240,64,.04); }
+    .lb-rank { width: 28px; font-family: var(--font-head); font-size: 16px; font-weight: 800; color: var(--muted); text-align: center; flex-shrink: 0; }
+    .lb-rank.gold { color: #f0c040; }
+    .lb-rank.silver { color: #b0b0b0; }
+    .lb-rank.bronze { color: #c07840; }
+    .lb-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--bg3); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+    .lb-avatar.me-av { background: rgba(200,240,64,.15); color: var(--accent); }
+    .lb-name { flex: 1; font-size: 14px; font-weight: 500; }
+    .lb-xp { font-family: var(--font-head); font-size: 15px; font-weight: 700; color: var(--accent); }
+
+    /* ── STREAK ─────────────────────────────────────────── */
+    .streak-row { display: flex; gap: 8px; margin: 12px 0; }
+    .streak-day {
+      flex: 1; aspect-ratio: 1;
+      border: 1px solid var(--border); border-radius: 10px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 11px; color: var(--muted); gap: 4px; font-weight: 500;
+    }
+    .streak-day.done { background: rgba(200,240,64,.1); border-color: rgba(200,240,64,.4); color: var(--accent); }
+    .streak-day.today { border-color: var(--accent2); color: var(--accent2); }
+    .streak-day-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    /* ── TOAST ──────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 28px; right: 28px;
+      background: var(--accent); color: #0c0c0b;
+      font-family: var(--font-head); font-size: 14px; font-weight: 700;
+      padding: 14px 22px; border-radius: 40px; z-index: 9999;
+      transform: translateY(80px); opacity: 0;
+      transition: all .3s cubic-bezier(.4,0,.2,1);
+      pointer-events: none;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+
+    /* ── RESPONSIVE ─────────────────────────────────────── */
+    @media (max-width: 680px) {
+      .hero { grid-template-columns: 1fr; padding: 40px 0 32px; gap: 32px; }
+      .hero h1 { font-size: 36px; }
+      .sc-wrap, .wheel-wrap { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<div class="wrap">
+  <nav>
+    <div class="nav-logo">mi<span>web</span></div>
+    <div class="nav-right">
+      <div class="nav-xp">
+        <div class="nav-xp-dot"></div>
+        <span id="nav-xp-val">0</span> XP
+      </div>
+      <div class="nav-streak">🔥 <span id="nav-streak-val">0</span> días</div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div>
+      <div class="hero-tag">Sistema de premios activo</div>
+      <h1>Leé,<br>jugá y<br><em>ganá real</em></h1>
+      <p>Cada nota que leés desbloquea una scratch card, XP y chances de ganar premios reales. Cuanto más leés, más subís.</p>
+      <button class="hero-cta" onclick="showTab('scratch')">
+        Ver mi scratch card →
+      </button>
+    </div>
+    <div class="hero-level-card">
+      <div class="hlc-title">Tu progreso</div>
+      <div class="hlc-level" id="hero-level-num">1</div>
+      <div class="hlc-name" id="hero-level-name">Lector</div>
+      <div class="xp-bar-track"><div class="xp-bar-fill" id="hero-xp-bar"></div></div>
+      <div class="xp-labels">
+        <span id="hero-xp-cur">0 XP</span>
+        <span id="hero-xp-max">200 XP</span>
+      </div>
+      <div class="hlc-stats">
+        <div class="hlc-stat">
+          <div class="hlc-stat-val" id="hero-prizes">0</div>
+          <div class="hlc-stat-label">premios ganados</div>
+        </div>
+        <div class="hlc-stat">
+          <div class="hlc-stat-val" id="hero-pos">#—</div>
+          <div class="hlc-stat-label">en el ranking</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STREAK -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:0">
+    <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Racha semanal</div>
+    <div class="streak-row" id="streak-row"></div>
+    <div id="streak-msg" style="font-size:13px;color:var(--muted);margin-top:8px"></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs-nav">
+    <button class="tab-btn active" onclick="showTab('scratch')">🎴 Scratch</button>
+    <button class="tab-btn" onclick="showTab('wheel')">🎡 Ruleta</button>
+    <button class="tab-btn" onclick="showTab('prizes')">🎁 Mis premios</button>
+    <button class="tab-btn" onclick="showTab('ranking')">🏆 Ranking</button>
+  </div>
+
+  <!-- TAB: SCRATCH -->
+  <div id="tab-scratch" class="tab-panel active">
+    <div class="sc-wrap">
+      <div class="sc-card">
+        <div class="sc-header">
+          <div class="sc-header-label" id="sc-label">Premio disponible</div>
+          <div class="sc-header-note" id="sc-note-title">—</div>
+        </div>
+        <div class="sc-canvas-wrap">
+          <div class="sc-prize-layer">
+            <div class="sc-prize-icon" id="sc-prize-icon"></div>
+            <div class="sc-prize-text" id="sc-prize-text"></div>
+            <div class="sc-prize-sub" id="sc-prize-sub"></div>
+          </div>
+          <canvas id="scratch-canvas" width="480" height="180"></canvas>
+        </div>
+        <div class="sc-footer">
+          <div class="sc-progress-track"><div class="sc-progress-fill" id="sc-prog"></div></div>
+          <div class="sc-pct" id="sc-pct">0% raspado</div>
+        </div>
+      </div>
+
+      <div class="sc-info">
+        <div class="sc-result-box">
+          <div id="sc-result-content">
+            <div style="font-size:14px;color:var(--muted)">Rascá la tarjeta para revelar tu premio</div>
+          </div>
+        </div>
+        <div class="sc-hint" id="sc-hint">← Rascá con el mouse o el dedo</div>
+        <button class="btn btn-accent" id="sc-next-btn" style="display:none" onclick="nextScratch()">Siguiente tarjeta</button>
+        <button class="btn btn-outline" onclick="simulateRead()">Simular lectura de nota (+XP)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: WHEEL -->
+  <div id="tab-wheel" class="tab-panel">
+    <div class="wheel-wrap">
+      <div>
+        <div class="wheel-canvas-wrap">
+          <canvas id="wheel-canvas" width="280" height="280"></canvas>
+          <div class="wheel-pointer"></div>
+        </div>
+        <div style="margin-top:20px">
+          <button class="btn btn-accent" id="wheel-btn" onclick="spinWheel()">Girar ruleta</button>
+        </div>
+      </div>
+      <div class="wheel-info">
+        <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Ruleta especial</div>
+        <div class="wheel-avail" id="wheel-avail">1 giro disponible hoy</div>
+        <div class="wheel-result-box">
+          <div id="wheel-result-content">
+            <div style="font-size:14px;color:var(--muted)">Girá la ruleta para ganar</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">Un giro por día · Los premios se mandan por email</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: PRIZES -->
+  <div id="tab-prizes" class="tab-panel">
+    <div class="prizes-grid" id="prizes-list">
+      <div class="empty-msg">Todavía no ganaste premios. ¡Empezá rascando!</div>
+    </div>
+  </div>
+
+  <!-- TAB: RANKING -->
+  <div id="tab-ranking" class="tab-panel">
+    <div class="lb-list" id="lb-list"></div>
+    <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:16px;padding-bottom:60px">
+      El ranking se reinicia cada lunes · Seguí leyendo para subir
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<div id="toast"></div>
+
+<script>
+// ─── CONFIGURACIÓN ───────────────────────────────────────────────────────────
+// Cambiá esta URL por la de tu Vercel una vez que lo tengas deployado
+const API_URL = '/api/game';
+
+// ─── NIVELES ─────────────────────────────────────────────────────────────────
+const LEVELS = [
+  { name: 'Lector',     min: 0,    max: 200  },
+  { name: 'Curioso',    min: 200,  max: 500  },
+  { name: 'Explorador', min: 500,  max: 1000 },
+  { name: 'Pensador',   min: 1000, max: 2000 },
+  { name: 'Sabio',      min: 2000, max: 4000 },
+  { name: 'Maestro',    min: 4000, max: 8000 },
+  { name: 'Leyenda',    min: 8000, max: Infinity },
+];
+
+// ─── PREMIOS (para demo sin backend) ─────────────────────────────────────────
+const SCRATCH_PRIZES = [
+  { icon: '◆', text: '+100 XP',       sub: 'Sumado a tu perfil',          xp: 100, type: 'xp',     w: 28 },
+  { icon: '◆', text: '+50 XP',        sub: 'Sumado a tu perfil',          xp: 50,  type: 'xp',     w: 22 },
+  { icon: '◆', text: '+25 XP',        sub: 'Sumado a tu perfil',          xp: 25,  type: 'xp',     w: 20 },
+  { icon: '★', text: '10% OFF',       sub: 'Código: LECTOR10',            xp: 0,   type: 'coupon', w: 15, code: 'LECTOR10' },
+  { icon: '★', text: '20% OFF',       sub: 'Código: LECTOR20',            xp: 0,   type: 'coupon', w: 10, code: 'LECTOR20' },
+  { icon: '▲', text: 'Sorteo',        sub: 'Entraste al sorteo semanal',  xp: 0,   type: 'sorteo', w: 4  },
+  { icon: '●', text: 'Acceso VIP 7d', sub: 'Contenido premium activo',    xp: 0,   type: 'vip',    w: 1  },
+];
+
+const WHEEL_SEGS = [
+  { label: '+50 XP',   color: '#1e3a1e', text: '#c8f040' },
+  { label: 'Sorteo',   color: '#2a1e1e', text: '#f04060' },
+  { label: '25% OFF',  color: '#1e2a1e', text: '#40f0a0' },
+  { label: '+100 XP',  color: '#1e1e3a', text: '#c8f040' },
+  { label: 'VIP 7d',   color: '#2a1e2a', text: '#f0c040' },
+  { label: '+200 XP',  color: '#1e2a2a', text: '#c8f040' },
+  { label: 'Sorteo+',  color: '#2a2a1e', text: '#f04060' },
+  { label: '50% OFF',  color: '#1e1e1e', text: '#40c0f0' },
+];
+
+const FAKE_USERS = [
+  { name: 'María G.',  xp: 3420, me: false },
+  { name: 'Carlos R.', xp: 2890, me: false },
+  { name: 'Ana P.',    xp: 2100, me: false },
+  { name: 'Tú',        xp: 0,    me: true  },
+  { name: 'Luis M.',   xp: 980,  me: false },
+  { name: 'Sofía T.',  xp: 760,  me: false },
+  { name: 'Diego N.',  xp: 540,  me: false },
+];
+
+// ─── ESTADO ──────────────────────────────────────────────────────────────────
+function loadState() {
+  try { return JSON.parse(localStorage.getItem('gm_v1') || 'null'); } catch { return null; }
+}
+function saveState(s) {
+  try { localStorage.setItem('gm_v1', JSON.stringify(s)); } catch {}
+}
+
+let state = loadState() || {
+  xp: 0,
+  streak: 0,
+  lastDay: null,
+  prizes: [],
+  scratchQueue: [],   // noteIds pendientes de raspar
+  scratchDone: [],    // noteIds ya raspados
+  wheelLastSpin: null,
+  notesRead: 0,
+};
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function getLevel(xp) {
+  for (let i = LEVELS.length - 1; i >= 0; i--)
+    if (xp >= LEVELS[i].min) return { ...LEVELS[i], idx: i };
+  return { ...LEVELS[0], idx: 0 };
+}
+
+function pickPrize(pool) {
+  const total = pool.reduce((s, p) => s + p.w, 0);
+  let r = Math.random() * total;
+  for (const p of pool) { r -= p.w; if (r <= 0) return { ...p }; }
+  return { ...pool[0] };
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ─── RENDER GLOBAL ────────────────────────────────────────────────────────────
+function render() {
+  const lv = getLevel(state.xp);
+  const next = LEVELS[Math.min(lv.idx + 1, LEVELS.length - 1)];
+  const pct = lv.max === Infinity ? 100
+    : Math.round(((state.xp - lv.min) / (lv.max - lv.min)) * 100);
+
+  // Nav
+  document.getElementById('nav-xp-val').textContent = state.xp;
+  document.getElementById('nav-streak-val').textContent = state.streak;
+
+  // Hero level card
+  document.getElementById('hero-level-num').textContent = lv.idx + 1;
+  document.getElementById('hero-level-name').textContent = lv.name;
+  document.getElementById('hero-xp-bar').style.width = pct + '%';
+  document.getElementById('hero-xp-cur').textContent = state.xp + ' XP';
+  document.getElementById('hero-xp-max').textContent = lv.max === Infinity ? '∞' : lv.max + ' XP';
+  document.getElementById('hero-prizes').textContent = state.prizes.length;
+
+  const myXp = state.xp;
+  const pos = FAKE_USERS.filter(u => !u.me && u.xp > myXp).length + 1;
+  document.getElementById('hero-pos').textContent = '#' + pos;
+
+  // Streak row
+  const days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+  const today = new Date().getDay(); // 0=dom
+  const row = document.getElementById('streak-row');
+  row.innerHTML = days.map((d, i) => {
+    const dayIdx = i === 6 ? 0 : i + 1; // lunes=1...dom=0
+    const isToday = dayIdx === today || (i === 6 && today === 0);
+    const isPast = state.streak > (isToday ? 0 : 1) &&
+      ((today === 0 ? 7 : today) - (i + 1)) < state.streak &&
+      ((today === 0 ? 7 : today) - (i + 1)) >= 0;
+    let cls = 'streak-day';
+    if (isToday) cls += ' today';
+    else if (isPast) cls += ' done';
+    return `<div class="${cls}"><div class="streak-day-dot"></div>${d}</div>`;
+  }).join('');
+  document.getElementById('streak-msg').textContent =
+    state.streak === 0 ? '¡Empezá tu racha hoy!'
+    : state.streak === 1 ? '1 día seguido · ¡Volvé mañana!'
+    : state.streak + ' días seguidos · ¡No la rompas!';
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function showTab(id) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    const ids = ['scratch', 'wheel', 'prizes', 'ranking'];
+    b.classList.toggle('active', ids[i] === id);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  if (id === 'prizes') renderPrizes();
+  if (id === 'ranking') renderRanking();
+  if (id === 'scratch') initScratch();
+  if (id === 'wheel') renderWheel();
+}
+
+// ─── SCRATCH ──────────────────────────────────────────────────────────────────
+let scratchCanvas, scratchCtx, scratchPrize, scratchRevealed = false, scratchDrawing = false;
+
+function initScratch() {
+  const pending = state.scratchQueue.filter(id => !state.scratchDone.includes(id));
+  const noteLabel = pending.length > 0 ? 'Nota #' + pending[0] : '—';
+  document.getElementById('sc-note-title').textContent = noteLabel;
+  document.getElementById('sc-label').textContent =
+    pending.length > 0 ? pending.length + ' tarjeta' + (pending.length > 1 ? 's' : '') + ' disponible' + (pending.length > 1 ? 's' : '')
+    : 'Leé una nota para desbloquear';
+
+  scratchCanvas = document.getElementById('scratch-canvas');
+  scratchCtx = scratchCanvas.getContext('2d');
+  scratchPrize = pickPrize(SCRATCH_PRIZES);
+  scratchRevealed = false;
+
+  document.getElementById('sc-prize-icon').textContent = scratchPrize.icon;
+  document.getElementById('sc-prize-text').textContent = scratchPrize.text;
+  document.getElementById('sc-prize-sub').textContent = scratchPrize.sub;
+  document.getElementById('sc-prog').style.width = '0%';
+  document.getElementById('sc-pct').textContent = '0% raspado';
+  document.getElementById('sc-result-content').innerHTML = '<div style="font-size:14px;color:var(--muted)">Rascá la tarjeta para revelar tu premio</div>';
+  document.getElementById('sc-next-btn').style.display = 'none';
+  document.getElementById('sc-hint').textContent = '← Rascá con el mouse o el dedo';
+
+  // Dibujar capa de rascar
+  const ctx = scratchCtx;
+  const w = scratchCanvas.width, h = scratchCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#1c1c19';
+  ctx.fillRect(0, 0, w, h);
+  // Patrón decorativo
+  ctx.fillStyle = '#2a2a26';
+  for (let i = 0; i < 30; i++) {
+    ctx.font = `${12 + (i % 3)}px sans-serif`;
+    ctx.fillText('✦  ✦  ✦', 10 + (i % 6) * 76, 18 + Math.floor(i / 6) * 34);
+  }
+  ctx.fillStyle = '#6b6b60';
+  ctx.font = '600 14px "Syne", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('RASCÁ AQUÍ PARA REVELAR', w / 2, h / 2 + 5);
+  ctx.textAlign = 'left';
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Listeners
+  scratchCanvas.onmousedown = e => { scratchDrawing = true; doScratch(e); };
+  scratchCanvas.onmousemove = e => { if (scratchDrawing) doScratch(e); };
+  scratchCanvas.onmouseup = () => scratchDrawing = false;
+  scratchCanvas.onmouseleave = () => scratchDrawing = false;
+  scratchCanvas.ontouchstart = e => { e.preventDefault(); scratchDrawing = true; doScratch(e.touches[0]); };
+  scratchCanvas.ontouchmove = e => { e.preventDefault(); if (scratchDrawing) doScratch(e.touches[0]); };
+  scratchCanvas.ontouchend = () => scratchDrawing = false;
+}
+
+function doScratch(e) {
+  if (scratchRevealed) return;
+  const rect = scratchCanvas.getBoundingClientRect();
+  const scaleX = scratchCanvas.width / rect.width;
+  const scaleY = scratchCanvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+  scratchCtx.globalCompositeOperation = 'destination-out';
+  scratchCtx.beginPath();
+  scratchCtx.arc(x, y, 28, 0, Math.PI * 2);
+  scratchCtx.fill();
+  checkScratchPct();
+}
+
+function checkScratchPct() {
+  const data = scratchCtx.getImageData(0, 0, scratchCanvas.width, scratchCanvas.height).data;
+  let cleared = 0;
+  for (let i = 3; i < data.length; i += 4) if (data[i] === 0) cleared++;
+  const pct = Math.round((cleared / (scratchCanvas.width * scratchCanvas.height)) * 100);
+  document.getElementById('sc-prog').style.width = Math.min(pct, 100) + '%';
+  document.getElementById('sc-pct').textContent = Math.min(pct, 100) + '% raspado';
+  if (pct >= 50 && !scratchRevealed) revealScratch();
+}
+
+function revealScratch() {
+  scratchRevealed = true;
+  scratchCtx.globalCompositeOperation = 'destination-out';
+  scratchCtx.fillRect(0, 0, scratchCanvas.width, scratchCanvas.height);
+  scratchCanvas.style.pointerEvents = 'none';
+  document.getElementById('sc-prog').style.width = '100%';
+  document.getElementById('sc-pct').textContent = '100% raspado';
+  document.getElementById('sc-hint').textContent = '';
+
+  // Guardar premio
+  const p = scratchPrize;
+  if (p.xp) { state.xp += p.xp; }
+  state.prizes.unshift({ icon: p.icon, text: p.text, sub: p.sub, code: p.code, source: 'Scratch card', date: new Date().toLocaleDateString('es-AR') });
+  if (state.scratchQueue.length > 0) {
+    const id = state.scratchQueue.shift();
+    state.scratchDone.push(id);
+  }
+  saveState(state);
+  render();
+
+  // Mostrar resultado
+  const msgs = {
+    xp:     ['¡XP ganados!',        'Se sumaron automáticamente a tu perfil.'],
+    coupon: ['¡Descuento ganado!',  'Usá el código en tu próxima compra.'],
+    sorteo: ['¡Entraste al sorteo!','El ganador se anuncia el viernes.'],
+    vip:    ['¡PREMIO MAYOR! 🎉',   'Acceso VIP activo por 7 días.'],
+  };
+  const [title, detail] = msgs[p.type] || ['¡Premio!', ''];
+  let html = `<div class="sc-result-title">${title}</div><div class="sc-result-detail">${detail}</div>`;
+  if (p.code) html += `<div class="sc-result-code">${p.code}</div>`;
+  document.getElementById('sc-result-content').innerHTML = html;
+
+  const pending = state.scratchQueue.filter(id => !state.scratchDone.includes(id));
+  if (pending.length > 0) {
+    document.getElementById('sc-next-btn').style.display = 'block';
+    document.getElementById('sc-next-btn').textContent = 'Siguiente tarjeta (' + pending.length + ' más)';
+  }
+  showToast(p.type === 'vip' ? '¡PREMIO MAYOR! 🎉' : `¡Ganaste: ${p.text}!`);
+}
+
+function nextScratch() { initScratch(); }
+
+// Simular lectura (demo)
+let noteCounter = 1;
+function simulateRead() {
+  state.notesRead++;
+  state.xp += 30;
+  const today = new Date().toDateString();
+  if (state.lastDay !== today) {
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    state.streak = state.lastDay === yesterday ? state.streak + 1 : 1;
+    state.lastDay = today;
+  }
+  state.scratchQueue.push(noteCounter++);
+  saveState(state);
+  render();
+  initScratch();
+  showToast('+30 XP · Scratch card desbloqueada 🎴');
+}
+
+// ─── WHEEL ────────────────────────────────────────────────────────────────────
+let wheelSpinning = false;
+
+function renderWheel() {
+  const canvas = document.getElementById('wheel-canvas');
+  const ctx = canvas.getContext('2d');
+  drawWheel(ctx, 0);
+  const today = new Date().toDateString();
+  const canSpin = state.wheelLastSpin !== today;
+  document.getElementById('wheel-avail').textContent = canSpin
+    ? '1 giro disponible hoy' : 'Usaste tu giro · Volvé mañana';
+  document.getElementById('wheel-btn').disabled = !canSpin || wheelSpinning;
+}
+
+function drawWheel(ctx, rotation) {
+  const cx = 140, cy = 140, r = 130, n = WHEEL_SEGS.length;
+  ctx.clearRect(0, 0, 280, 280);
+  WHEEL_SEGS.forEach((seg, i) => {
+    const start = rotation + i * (Math.PI * 2 / n) - Math.PI / 2;
+    const end = start + Math.PI * 2 / n;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, start, end); ctx.closePath();
+    ctx.fillStyle = seg.color; ctx.fill();
+    ctx.strokeStyle = '#2a2a26'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(start + Math.PI / n);
+    ctx.textAlign = 'right'; ctx.font = '600 11px "Syne",sans-serif'; ctx.fillStyle = seg.text;
+    ctx.fillText(seg.label, r - 10, 4); ctx.restore();
+  });
+  // Centro
+  ctx.beginPath(); ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+  ctx.fillStyle = '#0c0c0b'; ctx.fill();
+  ctx.strokeStyle = '#2a2a26'; ctx.lineWidth = 1; ctx.stroke();
+}
+
+function spinWheel() {
+  if (wheelSpinning) return;
+  const today = new Date().toDateString();
+  if (state.wheelLastSpin === today) return;
+  wheelSpinning = true;
+  document.getElementById('wheel-btn').disabled = true;
+
+  const canvas = document.getElementById('wheel-canvas');
+  const ctx = canvas.getContext('2d');
+  const winner = Math.floor(Math.random() * WHEEL_SEGS.length);
+  const targetAngle = Math.PI * 2 - winner * (Math.PI * 2 / WHEEL_SEGS.length);
+  const totalSpin = Math.PI * 2 * 7 + targetAngle;
+  const duration = 4500;
+  const startTime = performance.now();
+
+  function frame(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 4);
+    drawWheel(ctx, ease * totalSpin);
+    if (t < 1) { requestAnimationFrame(frame); return; }
+
+    wheelSpinning = false;
+    state.wheelLastSpin = today;
+    const seg = WHEEL_SEGS[winner];
+    const xpMatch = seg.label.match(/\+(\d+)/);
+    if (xpMatch) state.xp += parseInt(xpMatch[1]);
+    state.prizes.unshift({ icon: '▶', text: seg.label, sub: 'Ganado en la ruleta', source: 'Ruleta', date: new Date().toLocaleDateString('es-AR') });
+    saveState(state);
+    render();
+    document.getElementById('wheel-result-content').innerHTML =
+      `<div class="wheel-result-title">¡${seg.label}!</div><div class="wheel-result-detail">Premio guardado en tu historial.</div>`;
+    document.getElementById('wheel-avail').textContent = 'Usaste tu giro · Volvé mañana';
+    showToast(`¡Ganaste: ${seg.label}!`);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ─── PRIZES ───────────────────────────────────────────────────────────────────
+function renderPrizes() {
+  const el = document.getElementById('prizes-list');
+  if (state.prizes.length === 0) {
+    el.innerHTML = '<div class="empty-msg">Todavía no ganaste premios. ¡Empezá rascando!</div>';
+    return;
+  }
+  el.innerHTML = state.prizes.map(p => `
+    <div class="prize-item">
+      <div class="prize-icon-box">${p.icon || '★'}</div>
+      <div>
+        <div class="prize-name">${p.text}</div>
+        <div class="prize-meta">${p.source} · ${p.date}</div>
+      </div>
+      ${p.code ? `<div class="prize-code-tag">${p.code}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// ─── RANKING ──────────────────────────────────────────────────────────────────
+function renderRanking() {
+  const users = FAKE_USERS.map(u => u.me ? { ...u, xp: state.xp } : { ...u });
+  users.sort((a, b) => b.xp - a.xp);
+  const rankColors = ['gold', 'silver', 'bronze'];
+  document.getElementById('lb-list').innerHTML = users.map((u, i) => `
+    <div class="lb-item ${u.me ? 'me' : ''}">
+      <div class="lb-rank ${rankColors[i] || ''}">${i + 1}</div>
+      <div class="lb-avatar ${u.me ? 'me-av' : ''}">${u.name.slice(0,2).toUpperCase()}</div>
+      <div class="lb-name">${u.name}${u.me ? ' · vos' : ''}</div>
+      <div class="lb-xp">${u.xp} XP</div>
+    </div>
+  `).join('');
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+render();
+initScratch();
+renderWheel();
+</script>
+</body>
+</html>
