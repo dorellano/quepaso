@@ -1,13 +1,10 @@
-// api/game.js
-// Vercel Edge Function — el árbitro de todos los premios
-// Deploy: subir a /api/game.js en tu repo de Vercel
-
+// api/game.js - Versión con CORS Reforzado
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY; // service_role, no anon
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const RESEND_KEY   = process.env.RESEND_API_KEY;
 const SITE_URL     = process.env.SITE_URL || 'https://quepasariocuarto.com.ar';
 
-// ─── Probabilidades de premios (configuralas como quieras) ───────────────────
+// ─── Probabilidades de premios ───────────────────────────────────────────────
 const SCRATCH_PRIZES = [
   { type: 'xp',     label: '+100 XP',        xp: 100, weight: 28 },
   { type: 'xp',     label: '+50 XP',         xp: 50,  weight: 22 },
@@ -29,7 +26,6 @@ const WHEEL_PRIZES = [
   { type: 'vip',    label: 'Acceso VIP 7d',   xp: 0,   weight: 4  },
 ];
 
-// ─── Helper: elegir premio según pesos ──────────────────────────────────────
 function pickPrize(pool) {
   const total = pool.reduce((s, p) => s + p.weight, 0);
   let r = Math.random() * total;
@@ -40,7 +36,6 @@ function pickPrize(pool) {
   return { ...pool[0] };
 }
 
-// ─── Helper: llamar a Supabase ───────────────────────────────────────────────
 async function sb(path, method = 'GET', body = null) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
     method,
@@ -59,10 +54,8 @@ async function sb(path, method = 'GET', body = null) {
   return res.json();
 }
 
-// ─── Helper: mandar email con Resend ────────────────────────────────────────
 async function sendPrizeEmail(email, name, prize) {
   if (!RESEND_KEY) return; 
-
   const subjects = {
     coupon: `¡Ganaste ${prize.label} en ${SITE_URL}!`,
     vip:    `¡Activaste tu acceso VIP!`,
@@ -71,34 +64,15 @@ async function sendPrizeEmail(email, name, prize) {
   };
 
   const bodies = {
-    coupon: `
-      <h2>¡Felicitaciones ${name}!</h2>
-      <p>Ganaste un descuento de <strong>${prize.label}</strong>.</p>
-      <p style="font-size:24px;font-weight:bold;background:#f0f0f0;padding:16px;text-align:center;border-radius:8px">
-        ${prize.code}
-      </p>
-      <p>Usalo en tu próxima compra en <a href="${SITE_URL}">${SITE_URL}</a></p>
-    `,
-    vip: `
-      <h2>¡Acceso VIP activado, ${name}!</h2>
-      <p>Tenés 7 días de contenido premium desbloqueado.</p>
-    `,
-    sorteo: `
-      <h2>¡${name}, entraste al sorteo!</h2>
-      <p>Participás del sorteo semanal. El ganador se anuncia el viernes.</p>
-    `,
-    xp: `
-      <h2>¡${name}, ganaste ${prize.label}!</h2>
-      <p>Tus puntos fueron sumados a tu perfil automáticamente.</p>
-    `,
+    coupon: `<h2>¡Felicitaciones ${name}!</h2><p>Ganaste ${prize.label}. Código: <strong>${prize.code}</strong></p>`,
+    vip: `<h2>¡Acceso VIP activado, ${name}!</h2>`,
+    sorteo: `<h2>¡${name}, entraste al sorteo!</h2>`,
+    xp: `<h2>¡${name}, ganaste ${prize.label}!</h2>`,
   };
 
   await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${RESEND_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: `Qué Pasa Río Cuarto <premios@quepasariocuarto.com.ar>`,
       to: email,
@@ -110,25 +84,25 @@ async function sendPrizeEmail(email, name, prize) {
 
 // ─── Handler principal ───────────────────────────────────────────────────────
 export default async function handler(req) {
-  // CONFIGURACIÓN DE CORS PARA QUE TU WORDPRESS PUEDA ENTRAR
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      }
-    });
-  }
-
+  // CONFIGURACIÓN DE HEADERS UNIVERSALES (EL DESTREPADOR DE CORS)
   const headers = {
-    'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+    'Content-Type': 'application/json',
   };
 
+  // Responder a la solicitud de "pre-vuelo" (OPTIONS) que hace el navegador
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers });
+  }
+
   try {
+    // Si no están las variables de entorno, devolvemos error antes de que falle Supabase
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      throw new Error("Faltan configurar las variables de entorno en Vercel (SUPABASE_URL o KEY).");
+    }
+
     const { action, userId, email, name, noteId, noteTitle } = await req.json();
 
     if (action === 'identify') {
@@ -141,12 +115,7 @@ export default async function handler(req) {
     }
 
     if (action === 'noteRead') {
-      await sb('/note_reads', 'POST', {
-        user_id: userId,
-        note_id: noteId,
-        note_title: noteTitle,
-      });
-
+      await sb('/note_reads', 'POST', { user_id: userId, note_id: noteId, note_title: noteTitle });
       const user = await sb(`/game_users?id=eq.${userId}&select=*`);
       const u = user[0];
       const today = new Date().toISOString().split('T')[0];
@@ -155,72 +124,33 @@ export default async function handler(req) {
       if (u.last_active === yesterday) newStreak += 1;
       else if (u.last_active !== today) newStreak = 1;
 
-      await sb(`/game_users?id=eq.${userId}`, 'PATCH', {
-        last_active: today,
-        streak: newStreak,
-        xp: (u.xp || 0) + 30,
-      });
-
+      await sb(`/game_users?id=eq.${userId}`, 'PATCH', { last_active: today, streak: newStreak, xp: (u.xp || 0) + 30 });
       return new Response(JSON.stringify({ ok: true, xpGained: 30, streak: newStreak }), { headers });
     }
 
     if (action === 'scratch') {
       const reads = await sb(`/note_reads?user_id=eq.${userId}&note_id=eq.${noteId}&select=*`);
-      if (reads.length === 0 || reads[0].scratch_used) {
-        return new Response(JSON.stringify({ error: 'No permitido' }), { status: 400, headers });
-      }
-
+      if (reads.length === 0 || reads[0].scratch_used) throw new Error('Acción no permitida');
       const prize = pickPrize(SCRATCH_PRIZES);
       if (prize.code) prize.code = prize.code();
-
-      const saved = await sb('/prizes', 'POST', {
-        user_id: userId,
-        type: prize.type,
-        label: prize.label,
-        code: prize.code || null,
-        source: 'scratch',
-      });
-
+      await sb('/prizes', 'POST', { user_id: userId, type: prize.type, label: prize.label, code: prize.code || null, source: 'scratch' });
       await sb(`/note_reads?user_id=eq.${userId}&note_id=eq.${noteId}`, 'PATCH', { scratch_used: true });
-
       if (prize.xp > 0) {
         const user = await sb(`/game_users?id=eq.${userId}&select=xp`);
         await sb(`/game_users?id=eq.${userId}`, 'PATCH', { xp: (user[0]?.xp || 0) + prize.xp });
       }
-
-      const userInfo = await sb(`/game_users?id=eq.${userId}&select=email,name`);
-      await sendPrizeEmail(userInfo[0].email, userInfo[0].name, prize);
-
       return new Response(JSON.stringify({ prize }), { headers });
     }
 
     if (action === 'spin') {
       const today = new Date().toISOString().split('T')[0];
       const spins = await sb(`/wheel_spins?user_id=eq.${userId}&spin_date=eq.${today}&select=*`);
-      if (spins.length > 0) {
-        return new Response(JSON.stringify({ error: 'Ya giraste hoy' }), { status: 400, headers });
-      }
-
+      if (spins.length > 0) throw new Error('Ya giraste hoy');
       const prize = pickPrize(WHEEL_PRIZES);
       if (prize.code) prize.code = prize.code();
-
-      const saved = await sb('/prizes', 'POST', {
-        user_id: userId,
-        type: prize.type,
-        label: prize.label,
-        code: prize.code || null,
-        source: 'wheel',
-      });
-
+      const saved = await sb('/prizes', 'POST', { user_id: userId, type: prize.type, label: prize.label, code: prize.code || null, source: 'wheel' });
       await sb('/wheel_spins', 'POST', { user_id: userId, spin_date: today, prize_id: saved[0].id });
-
-      const userInfo = await sb(`/game_users?id=eq.${userId}&select=email,name`);
-      await sendPrizeEmail(userInfo[0].email, userInfo[0].name, prize);
-
-      const segmentMap = { '+50 XP': 0, 'Sorteo semanal': 1, '25% OFF': 2, '+100 XP': 3, 'Acceso VIP 7d': 4, '+200 XP': 5, 'Sorteo semanal+': 6, '50% OFF': 7 };
-      const segment = segmentMap[prize.label] ?? Math.floor(Math.random() * 8);
-
-      return new Response(JSON.stringify({ prize, segment }), { headers });
+      return new Response(JSON.stringify({ prize }), { headers });
     }
 
     if (action === 'getState') {
@@ -233,15 +163,9 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ user: user[0], prizes, readNotes: reads, canSpin: spins.length === 0 }), { headers });
     }
 
-    if (action === 'leaderboard') {
-      const rows = await sb('/leaderboard_weekly?select=*&limit=10');
-      return new Response(JSON.stringify({ rows }), { headers });
-    }
-
     return new Response(JSON.stringify({ error: 'Acción desconocida' }), { status: 400, headers });
 
   } catch (err) {
-    console.error(err);
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers });
   }
 }
