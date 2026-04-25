@@ -2,7 +2,7 @@
 // Copiá este archivo a tu web y llamá a las funciones desde tu CMS
 //
 // CONFIGURACIÓN: cambiá esta URL por la de tu Vercel
-const API_URL = 'https://tu-proyecto.vercel.app/api/game';
+const API_URL = 'https://quepaso.vercel.app/api/game';
 
 // ─── Estado local (caché entre llamadas) ────────────────────────────────────
 let _user = null;
