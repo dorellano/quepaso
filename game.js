@@ -1,14 +1,11 @@
 // api/game.js
 // Vercel Edge Function — el árbitro de todos los premios
 // Deploy: subir a /api/game.js en tu repo de Vercel
-//
-// Esta función recibe todas las acciones del juego y devuelve
-// los resultados de forma segura (el cliente NUNCA decide el premio)
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY; // service_role, no anon
 const RESEND_KEY   = process.env.RESEND_API_KEY;
-const SITE_URL     = process.env.SITE_URL || 'https://tuweb.com';
+const SITE_URL     = process.env.SITE_URL || 'https://quepasariocuarto.com.ar';
 
 // ─── Probabilidades de premios (configuralas como quieras) ───────────────────
 const SCRATCH_PRIZES = [
@@ -64,7 +61,7 @@ async function sb(path, method = 'GET', body = null) {
 
 // ─── Helper: mandar email con Resend ────────────────────────────────────────
 async function sendPrizeEmail(email, name, prize) {
-  if (!RESEND_KEY) return; // Si no hay key configurada, saltar
+  if (!RESEND_KEY) return; 
 
   const subjects = {
     coupon: `¡Ganaste ${prize.label} en ${SITE_URL}!`,
@@ -81,22 +78,18 @@ async function sendPrizeEmail(email, name, prize) {
         ${prize.code}
       </p>
       <p>Usalo en tu próxima compra en <a href="${SITE_URL}">${SITE_URL}</a></p>
-      <p style="color:#666;font-size:12px">Válido por 30 días. No acumulable.</p>
     `,
     vip: `
       <h2>¡Acceso VIP activado, ${name}!</h2>
       <p>Tenés 7 días de contenido premium desbloqueado.</p>
-      <p><a href="${SITE_URL}/vip" style="background:#000;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none">Ir al contenido VIP</a></p>
     `,
     sorteo: `
       <h2>¡${name}, entraste al sorteo!</h2>
       <p>Participás del sorteo semanal. El ganador se anuncia el viernes.</p>
-      <p>Seguí leyendo para sumar más chances.</p>
     `,
     xp: `
       <h2>¡${name}, ganaste ${prize.label}!</h2>
       <p>Tus puntos fueron sumados a tu perfil automáticamente.</p>
-      <p><a href="${SITE_URL}">Ver mi perfil</a></p>
     `,
   };
 
@@ -107,7 +100,7 @@ async function sendPrizeEmail(email, name, prize) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: `Tu Web <premios@tuweb.com>`,
+      from: `Qué Pasa Río Cuarto <premios@quepasariocuarto.com.ar>`,
       to: email,
       subject: subjects[prize.type] || '¡Ganaste un premio!',
       html: bodies[prize.type] || `<p>Ganaste: ${prize.label}</p>`,
@@ -117,12 +110,13 @@ async function sendPrizeEmail(email, name, prize) {
 
 // ─── Handler principal ───────────────────────────────────────────────────────
 export default async function handler(req) {
+  // CONFIGURACIÓN DE CORS PARA QUE TU WORDPRESS PUEDA ENTRAR
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, GET',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       }
     });
   }
@@ -130,12 +124,13 @@ export default async function handler(req) {
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 
   try {
     const { action, userId, email, name, noteId, noteTitle } = await req.json();
 
-    // ── ACCIÓN: registrar usuario (o recuperarlo) ──────────────────────────
     if (action === 'identify') {
       const existing = await sb(`/game_users?email=eq.${encodeURIComponent(email)}&select=*`);
       if (existing.length > 0) {
@@ -145,16 +140,13 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ user: created[0] }), { headers });
     }
 
-    // ── ACCIÓN: marcar nota como leída ─────────────────────────────────────
     if (action === 'noteRead') {
-      // Upsert: si ya existe la combinación user+note, no hace nada
       await sb('/note_reads', 'POST', {
         user_id: userId,
         note_id: noteId,
         note_title: noteTitle,
       });
 
-      // Actualizar streak
       const user = await sb(`/game_users?id=eq.${userId}&select=*`);
       const u = user[0];
       const today = new Date().toISOString().split('T')[0];
@@ -166,28 +158,21 @@ export default async function handler(req) {
       await sb(`/game_users?id=eq.${userId}`, 'PATCH', {
         last_active: today,
         streak: newStreak,
-        xp: (u.xp || 0) + 30, // 30 XP por leer una nota
+        xp: (u.xp || 0) + 30,
       });
 
       return new Response(JSON.stringify({ ok: true, xpGained: 30, streak: newStreak }), { headers });
     }
 
-    // ── ACCIÓN: usar scratch card ──────────────────────────────────────────
     if (action === 'scratch') {
-      // Verificar que la nota fue leída y no usó scratch todavía
       const reads = await sb(`/note_reads?user_id=eq.${userId}&note_id=eq.${noteId}&select=*`);
-      if (reads.length === 0) {
-        return new Response(JSON.stringify({ error: 'Nota no leída' }), { status: 400, headers });
-      }
-      if (reads[0].scratch_used) {
-        return new Response(JSON.stringify({ error: 'Scratch ya usado para esta nota' }), { status: 400, headers });
+      if (reads.length === 0 || reads[0].scratch_used) {
+        return new Response(JSON.stringify({ error: 'No permitido' }), { status: 400, headers });
       }
 
-      // Elegir premio en el servidor (seguro)
       const prize = pickPrize(SCRATCH_PRIZES);
       if (prize.code) prize.code = prize.code();
 
-      // Guardar premio
       const saved = await sb('/prizes', 'POST', {
         user_id: userId,
         type: prize.type,
@@ -196,54 +181,29 @@ export default async function handler(req) {
         source: 'scratch',
       });
 
-      // Marcar nota con scratch usado
       await sb(`/note_reads?user_id=eq.${userId}&note_id=eq.${noteId}`, 'PATCH', { scratch_used: true });
 
-      // Sumar XP si aplica
       if (prize.xp > 0) {
         const user = await sb(`/game_users?id=eq.${userId}&select=xp`);
         await sb(`/game_users?id=eq.${userId}`, 'PATCH', { xp: (user[0]?.xp || 0) + prize.xp });
       }
 
-      // Si ganó sorteo, agregar a raffle de esta semana
-      if (prize.type === 'sorteo') {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
-        const ws = weekStart.toISOString().split('T')[0];
-        const raffles = await sb(`/raffles?week_start=eq.${ws}&select=id`);
-        if (raffles.length > 0) {
-          const entries = await sb(`/raffle_entries?raffle_id=eq.${raffles[0].id}&user_id=eq.${userId}&select=*`);
-          if (entries.length > 0) {
-            await sb(`/raffle_entries?id=eq.${entries[0].id}`, 'PATCH', { entries: entries[0].entries + 1 });
-          } else {
-            await sb('/raffle_entries', 'POST', { raffle_id: raffles[0].id, user_id: userId });
-          }
-        }
-      }
-
-      // Mandar email con el premio
       const userInfo = await sb(`/game_users?id=eq.${userId}&select=email,name`);
       await sendPrizeEmail(userInfo[0].email, userInfo[0].name, prize);
-      await sb(`/prizes?id=eq.${saved[0].id}`, 'PATCH', { email_sent: true });
 
       return new Response(JSON.stringify({ prize }), { headers });
     }
 
-    // ── ACCIÓN: girar ruleta ───────────────────────────────────────────────
     if (action === 'spin') {
       const today = new Date().toISOString().split('T')[0];
-
-      // Verificar que no giró hoy
       const spins = await sb(`/wheel_spins?user_id=eq.${userId}&spin_date=eq.${today}&select=*`);
       if (spins.length > 0) {
-        return new Response(JSON.stringify({ error: 'Ya giraste hoy. Volvé mañana.' }), { status: 400, headers });
+        return new Response(JSON.stringify({ error: 'Ya giraste hoy' }), { status: 400, headers });
       }
 
-      // Elegir premio en el servidor
       const prize = pickPrize(WHEEL_PRIZES);
       if (prize.code) prize.code = prize.code();
 
-      // Guardar premio
       const saved = await sb('/prizes', 'POST', {
         user_id: userId,
         type: prize.type,
@@ -252,30 +212,17 @@ export default async function handler(req) {
         source: 'wheel',
       });
 
-      // Registrar spin
       await sb('/wheel_spins', 'POST', { user_id: userId, spin_date: today, prize_id: saved[0].id });
 
-      // Sumar XP si aplica
-      if (prize.xp > 0) {
-        const user = await sb(`/game_users?id=eq.${userId}&select=xp`);
-        await sb(`/game_users?id=eq.${userId}`, 'PATCH', { xp: (user[0]?.xp || 0) + prize.xp });
-      }
-
-      // Email
       const userInfo = await sb(`/game_users?id=eq.${userId}&select=email,name`);
       await sendPrizeEmail(userInfo[0].email, userInfo[0].name, prize);
 
-      // El segmento visual que debe mostrar la ruleta (mapear al índice más cercano)
-      const segmentMap = {
-        '+50 XP': 0, 'Sorteo semanal': 1, '25% OFF': 2, '+100 XP': 3,
-        'Acceso VIP 7d': 4, '+200 XP': 5, 'Sorteo semanal+': 6, '50% OFF': 7,
-      };
+      const segmentMap = { '+50 XP': 0, 'Sorteo semanal': 1, '25% OFF': 2, '+100 XP': 3, 'Acceso VIP 7d': 4, '+200 XP': 5, 'Sorteo semanal+': 6, '50% OFF': 7 };
       const segment = segmentMap[prize.label] ?? Math.floor(Math.random() * 8);
 
       return new Response(JSON.stringify({ prize, segment }), { headers });
     }
 
-    // ── ACCIÓN: obtener estado del usuario ─────────────────────────────────
     if (action === 'getState') {
       const [user, prizes, reads, spins] = await Promise.all([
         sb(`/game_users?id=eq.${userId}&select=*`),
@@ -283,15 +230,9 @@ export default async function handler(req) {
         sb(`/note_reads?user_id=eq.${userId}&select=note_id,scratch_used`),
         sb(`/wheel_spins?user_id=eq.${userId}&spin_date=eq.${new Date().toISOString().split('T')[0]}&select=id`),
       ]);
-      return new Response(JSON.stringify({
-        user: user[0],
-        prizes,
-        readNotes: reads,
-        canSpin: spins.length === 0,
-      }), { headers });
+      return new Response(JSON.stringify({ user: user[0], prizes, readNotes: reads, canSpin: spins.length === 0 }), { headers });
     }
 
-    // ── ACCIÓN: leaderboard ────────────────────────────────────────────────
     if (action === 'leaderboard') {
       const rows = await sb('/leaderboard_weekly?select=*&limit=10');
       return new Response(JSON.stringify({ rows }), { headers });
