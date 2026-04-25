@@ -1,142 +1,87 @@
-// gameEngine.js
-// Copiá este archivo a tu web y llamá a las funciones desde tu CMS
-//
-// CONFIGURACIÓN: cambiá esta URL por la de tu Vercel
+// gameEngine.js - EL MOTOR VISUAL REFORZADO
 const API_URL = 'https://quepaso.vercel.app/api/game';
-
-// ─── Estado local (caché entre llamadas) ────────────────────────────────────
 let _user = null;
 
-// ─── Llamar a la API ─────────────────────────────────────────────────────────
-async function api(body) {
+// 1. Inyectamos el diseño para que el juego sea grande y centrado
+const style = document.createElement('style');
+style.innerHTML = `
+  #game-modal-container {
+    position: fixed !important;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 999999999 !important; /* Por encima de todo */
+    font-family: sans-serif;
+  }
+  .game-card {
+    background: #fff;
+    padding: 25px;
+    border-radius: 20px;
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    border: 3px solid #ffcc00;
+  }
+  .game-card h2 { color: #333; margin-top: 0; }
+  .scratch-area {
+    width: 250px; height: 150px;
+    background: #ccc; margin: 20px auto;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: bold; cursor: pointer;
+    border-radius: 10px; border: 2px dashed #666;
+  }
+  .close-btn { margin-top: 15px; color: #666; cursor: pointer; text-decoration: underline; }
+`;
+document.head.appendChild(style);
+
+export async function identifyUser(email, name) {
   const res = await fetch(API_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ action: 'identify', email, name })
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Error del servidor');
-  return data;
-}
-
-// ─── FUNCIÓN 1: Identificar usuario ─────────────────────────────────────────
-// Llamar al cargar la página si el usuario está logueado en tu web
-// email: el email del usuario desde tu sistema de auth
-// name: nombre visible (opcional)
-export async function identifyUser(email, name) {
-  const data = await api({ action: 'identify', email, name });
   _user = data.user;
-  localStorage.setItem('gm_user', JSON.stringify(_user));
   return _user;
 }
 
-// Recuperar usuario del caché local sin llamar a la API
-export function getCachedUser() {
-  if (_user) return _user;
-  try {
-    const saved = localStorage.getItem('gm_user');
-    if (saved) { _user = JSON.parse(saved); return _user; }
-  } catch {}
-  return null;
-}
-
-// ─── FUNCIÓN 2: Registrar que leyó una nota ──────────────────────────────────
-// Llamar cuando el usuario scrolleó el 80% de un artículo
-// noteId: ID único de la nota en tu CMS (ej: el slug)
-// noteTitle: título visible
-export async function onNoteRead(noteId, noteTitle) {
-  const user = getCachedUser();
-  if (!user) return null;
-
-  const data = await api({
-    action: 'noteRead',
-    userId: user.id,
-    noteId,
-    noteTitle,
-  });
-
-  // Actualizar caché
-  _user.xp += data.xpGained;
-  _user.streak = data.streak;
-  localStorage.setItem('gm_user', JSON.stringify(_user));
-
-  return data; // { xpGained: 30, streak: N }
-}
-
-// ─── FUNCIÓN 3: Usar scratch card ────────────────────────────────────────────
-// Llamar cuando el usuario confirma que quiere raspar
-// noteId: la misma nota que activó la scratch card
-export async function useScratchCard(noteId) {
-  const user = getCachedUser();
-  if (!user) return null;
-
-  const data = await api({
-    action: 'scratch',
-    userId: user.id,
-    noteId,
-  });
-
-  // data.prize = { type, label, code, xp }
-  // El premio ya fue guardado en la DB y el email ya fue enviado
-  return data.prize;
-}
-
-// ─── FUNCIÓN 4: Girar la ruleta ──────────────────────────────────────────────
-// Llamar cuando el usuario presiona el botón de girar
-export async function spinWheel() {
-  const user = getCachedUser();
-  if (!user) return null;
-
-  const data = await api({ action: 'spin', userId: user.id });
-  // data.prize = { type, label, code, xp }
-  // data.segment = índice del segmento (0-7) donde debe "caer" la animación
-
-  return data; // { prize, segment }
-}
-
-// ─── FUNCIÓN 5: Obtener estado completo ──────────────────────────────────────
-// Llamar al iniciar la página del perfil / widget de juego
-export async function getGameState() {
-  const user = getCachedUser();
-  if (!user) return null;
-
-  const data = await api({ action: 'getState', userId: user.id });
-  _user = data.user;
-  localStorage.setItem('gm_user', JSON.stringify(_user));
-  return data; // { user, prizes, readNotes, canSpin }
-}
-
-// ─── FUNCIÓN 6: Leaderboard ───────────────────────────────────────────────────
-export async function getLeaderboard() {
-  return api({ action: 'leaderboard' });
-}
-
-// ─── FUNCIÓN 7: Detectar scroll (pegar en tu template de notas) ─────────────
-// Pegar esto en el <script> de cada página de nota:
-//
-//   import { initScrollTracker } from './gameEngine.js';
-//   initScrollTracker('slug-de-la-nota', 'Título de la nota', (xpGained) => {
-//     mostrarNotificacion(`¡+${xpGained} XP! Scratch card desbloqueada`);
-//     mostrarScratchCard('slug-de-la-nota');
-//   });
-//
-export function initScrollTracker(noteId, noteTitle, onComplete) {
-  let fired = false;
-
-  function checkScroll() {
-    if (fired) return;
-    const scrolled = window.scrollY + window.innerHeight;
-    const total = document.documentElement.scrollHeight;
-    const pct = scrolled / total;
-
-    if (pct >= 0.8) {
-      fired = true;
-      window.removeEventListener('scroll', checkScroll);
-      onNoteRead(noteId, noteTitle).then(result => {
-        if (result) onComplete(result.xpGained, result.streak);
-      });
+export function initScrollTracker(noteId, noteTitle, onWin) {
+  let triggered = false;
+  window.addEventListener('scroll', () => {
+    const scrollPercent = (window.scrollY + window.innerHeight) / document.documentElement.scrollHeight;
+    if (scrollPercent > 0.8 && !triggered && _user) {
+      triggered = true;
+      showScratchGame(noteId, noteTitle, onWin);
     }
-  }
+  });
+}
 
-  window.addEventListener('scroll', checkScroll, { passive: true });
+function showScratchGame(noteId, noteTitle, onWin) {
+  const container = document.createElement('div');
+  container.id = 'game-modal-container';
+  container.innerHTML = `
+    <div class="game-card">
+      <h2>¡LECTOR PREMIADO! 🎁</h2>
+      <p>Llegaste al final de la nota. ¡Raspá y descubrí tu premio!</p>
+      <div class="scratch-area" id="scratch-box">HACÉ CLIC AQUÍ</div>
+      <div class="close-btn" id="close-game">Cerrar y seguir leyendo</div>
+    </div>
+  `;
+  document.body.appendChild(container);
+
+  // Al hacer clic en el área, simulamos que ganó (luego pondremos la raspadita real)
+  document.getElementById('scratch-box').onclick = async () => {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'noteRead', userId: _user.id, noteId, noteTitle })
+    });
+    const data = await res.json();
+    document.getElementById('scratch-box').innerHTML = "¡GANASTE +30 XP!";
+    setTimeout(() => {
+      container.remove();
+      onWin(data.xpGained, data.streak);
+    }, 2000);
+  };
+
+  document.getElementById('close-game').onclick = () => container.remove();
 }
